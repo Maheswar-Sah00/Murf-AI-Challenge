@@ -1,39 +1,36 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
 import requests
+import shutil
 import os
+
+load_dotenv()
 
 app = FastAPI()
 
-# CORS middleware to allow frontend JS to call backend API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific domain
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Serve HTML/CSS/JS from static folder
 app.mount("/static", StaticFiles(directory="static"), name="static")
-from dotenv import load_dotenv
-load_dotenv()
-# Load your Murf API key from environment variable
-MURF_API_KEY = os.getenv("MURF_API_KEY", "YOUR_MURF_API_KEY")  # Change this or load from .env
 
-# Homepage (serves HTML file)
+MURF_API_KEY = os.getenv("MURF_API_KEY", "YOUR_MURF_API_KEY")
+
 @app.get("/")
 def read_homepage():
     return FileResponse("static/index.html")
 
-# Model for incoming text
 class TTSRequest(BaseModel):
     text: str
 
-# POST endpoint to call Murf API
 @app.post("/tts")
 def generate_audio(req: TTSRequest):
     murf_url = "https://api.murf.ai/v1/speech/generate"
@@ -44,7 +41,7 @@ def generate_audio(req: TTSRequest):
     }
 
     payload = {
-        "voiceId": "en-US-terrell",  # You can try other voices from Murf
+        "voiceId": "en-US-terrell",
         "text": req.text,
         "format": "MP3"
     }
@@ -62,3 +59,19 @@ def generate_audio(req: TTSRequest):
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": "Request failed", "details": str(e)})
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/upload")
+async def upload_audio(file: UploadFile = File(...)):
+    file_location = os.path.join(UPLOAD_DIR, file.filename)
+
+    with open(file_location, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": os.path.getsize(file_location)
+    }

@@ -62,11 +62,32 @@ document.addEventListener('DOMContentLoaded', () => {
         audioChunks.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
         const audioURL = URL.createObjectURL(blob);
         playbackAudio.src = audioURL;
         playbackAudio.style.display = 'block';
+
+        // Upload to server
+        const formData = new FormData();
+        formData.append('file', blob, 'recording.webm');
+
+        const statusMsg = document.createElement('p');
+        statusMsg.textContent = "Uploading...";
+        playbackAudio.parentNode.appendChild(statusMsg);
+
+        try {
+          const res = await fetch('http://127.0.0.1:8000/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await res.json();
+          statusMsg.textContent = `✅ Uploaded: ${result.filename} (${result.content_type}, ${result.size} bytes)`;
+        } catch (err) {
+          console.error(err);
+          statusMsg.textContent = "❌ Upload failed!";
+        }
       };
 
       mediaRecorder.start();
